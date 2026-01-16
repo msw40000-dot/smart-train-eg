@@ -5,6 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 dotenv.config();
+import axios from "axios";
 
 const { Pool } = pg;
 const app = express();
