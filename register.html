@@ -1,0 +1,54 @@
+<register html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تسجيل حساب جديد | Smart Train EG</title>
+    <style>
+        body { font-family: Arial; background: #f0f2f5; padding: 20px; text-align: center; }
+        .form-container { background: white; max-width: 400px; margin: auto; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+        button { width: 95%; padding: 10px; background: #004d40; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>إنشاء حساب جديد</h2>
+        <input type="text" id="fullName" placeholder="الاسم الكامل">
+        <input type="text" id="nationalId" placeholder="الرقم القومي (14 رقم)">
+        <input type="password" id="password" placeholder="كلمة السر (6 أرقام)">
+        <input type="text" id="mobile" placeholder="رقم الموبايل">
+        <input type="text" id="address" placeholder="العنوان">
+        <label><input type="checkbox" id="terms"> أوافق على الشروط والأحكام</label>
+        <button onclick="register()">تسجيل</button>
+        <p id="msg"></p>
+    </div>
+
+    <script>
+        async function register() {
+            const data = {
+                fullName: document.getElementById('fullName').value,
+                nationalId: document.getElementById('nationalId').value,
+                password: document.getElementById('password').value,
+                mobile: document.getElementById('mobile').value,
+                address: document.getElementById('address').value,
+                termsAccepted: document.getElementById('terms').checked
+            };
+
+            const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            if (result.token) {
+                alert('تم التسجيل بنجاح!');
+                localStorage.setItem('token', result.token);
+                window.location.href = 'index.html'; // يرجعه للرئيسية بعد النجاح
+            } else {
+                document.getElementById('msg').innerText = "خطأ: " + result.error;
+            }
+        }
+    </script>
+</body>
+</html>
