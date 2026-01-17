@@ -1,0 +1,55 @@
+<about.html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>من نحن | Smart Train EG</title>
+<style>
+body { font-family: Arial; direction: rtl; background:#f5f7fa; padding:20px }
+.container { background:#fff; padding:30px; border-radius:8px }
+h1 { color:#004d40 }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>من نحن</h1>
+<p>
+Smart Train EG منصة رقمية مصرية تعمل كوسيط تقني يهدف إلى تنظيم وتسهيل
+إعادة بيع وتبادل تذاكر القطارات بين المستخدمين بشكل آمن وقانوني.
+</p>
+<p>
+المنصة لا تصدر أو تبيع التذاكر بنفسها، بل توفر بنية تقنية منظمة
+تربط بين البائع والمشتري مقابل عمولة ثابتة.
+</p>
+</div>
+</body>
+</html>
+<<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>هدف المنصة | Smart Train EG</title>
+<style>
+body { font-family: Arial; direction: rtl; background:#f5f7fa; padding:20px }
+.container { background:#fff; padding:30px; border-radius:8px }
+h1 { color:#004d40 }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>هدف المنصة</h1>
+<ul>
+<li>منع السوق السوداء لتذاكر القطارات</li>
+<li>توفير حل لمن لم يجد تذكرة في الوقت المناسب</li>
+<li>حماية المستخدمين من الاحتيال</li>
+<li>ضمان الشفافية الكاملة في عمليات البيع والشراء</li>
+<li>بناء سوق تبادل قائم على الهوية والتحقق</li>
+</ul>
+</div>
+</body>
+</html>
+
+<li>بناء سوق تبادل قائم على الهوية والتحقق</li>
+</ul>
+</div>
+</body>
+</html>
