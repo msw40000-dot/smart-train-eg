@@ -1,157 +1,295 @@
-import express from 'express';
-import pg from 'pg';
-import bcrypt from 'bcrypt';
-import cors from 'cors';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import express from "express";
+import pg from "pg";
+import cors from "cors";
+import dotenv from "dotenv";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import axios from "axios";
 
+dotenv.config();
 const { Pool } = pg;
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const SALT_ROUNDS = 10;
-
-// --- Register API ---
-app.post('/api/register', async (req, res) => {
-    const { fullName, nationalId, password, mobile, termsAccepted } = req.body;
-
-    if (!fullName || !nationalId || !password || !mobile) {
-        return res.status(400).json({ error: "جميع الحقول مطلوبة" });
-    }
-
-    if (nationalId.length !== 14) return res.status(400).json({ error: "الرقم القومي لازم 14 رقم" });
-    if (password.length !== 6) return res.status(400).json({ error: "كلمة السر لازم 6 أرقام" });
-    if (!termsAccepted) return res.status(400).json({ error: "يجب الموافقة على الشروط والأحكام" });
-
-    try {
-        // التحقق إذا الرقم القومي أو الموبايل موجود مسبقًا
-        const exists = await pool.query(
-            'SELECT id FROM users WHERE national_id=$1 OR mobile=$2',
-            [nationalId, mobile]
-        );
-        if (exists.rows.length > 0) {
-            return res.status(400).json({ error: "الرقم القومي أو رقم الموبايل مسجل مسبقاً" });
-        }
-
-        // تشفير كلمة السر
-        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-
-        // حفظ المستخدم
-        const newUser = await pool.query(
-            'INSERT INTO users (full_name, national_id, password, mobile, terms_accepted) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-            [fullName, nationalId, hashedPassword, mobile, termsAccepted]
-        );
-
-        // إنشاء محفظة أوتوماتيك
-        await pool.query('INSERT INTO wallets (user_id) VALUES ($1)', [newUser.rows[0].id]);
-
-        res.json({ success: true, message: "تم التسجيل وإنشاء المحفظة بنجاح" });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });
-    }
+/* =======================
+   DATABASE
+======================= */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
 });
 
-// --- Basic Login API ---
-app.post('/api/login', async (req, res) => {
-    const { nationalId, password } = req.body;
+/* =======================
+   HELPERS
+======================= */
+function generateToken(user) {
+  return jwt.sign(
+    { id: user.id, national_id: user.national_id },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+}
 
-    if (!nationalId || !password) return res.status(400).json({ error: "الرقم القومي وكلمة السر مطلوبة" });
+function auth(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-    try {
-        const userResult = await pool.query('SELECT * FROM users WHERE national_id=$1', [nationalId]);
-        if (userResult.rows.length === 0) {
-            return res.status(400).json({ error: "الرقم القومي غير مسجل" });
-        }
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
 
-        const user = userResult.rows[0];
-        const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.status(400).json({ error: "كلمة السر غير صحيحة" });
+/* =======================
+   REGISTER
+======================= */
+app.post("/api/register", async (req, res) => {
+  const {
+    fullName,
+    nationalId,
+    password,
+    mobile,
+    address,
+    termsAccepted,
+  } = req.body;
 
-        res.json({ success: true, message: "تم تسجيل الدخول بنجاح", userId: user.id });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
-    }
+  if (nationalId.length !== 14)
+    return res.status(400).json({ error: "National ID must be 14 digits" });
+
+  if (password.length !== 6)
+    return res.status(400).json({ error: "Password must be 6 digits" });
+
+  if (!termsAccepted)
+    return res.status(400).json({ error: "Terms must be accepted" });
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+
+    const user = await pool.query(
+      `INSERT INTO users
+      (full_name, national_id, password_hash, mobile, address, terms_accepted)
+      VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING id, national_id`,
+      [fullName, nationalId, hash, mobile, address, termsAccepted]
+    );
+
+    await pool.query(
+      "INSERT INTO wallets (user_id) VALUES ($1)",
+      [user.rows[0].id]
+    );
+
+    res.json({ token: generateToken(user.rows[0]) });
+  } catch {
+    res.status(500).json({ error: "User already exists" });
+  }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-// =======================
-// Create Paymob Payment
-// =======================
-app.post("/api/pay", authMiddleware, async (req, res) => {
-  const { ticketId } = req.body;
+/* =======================
+   LOGIN
+======================= */
+app.post("/api/login", async (req, res) => {
+  const { nationalId, password } = req.body;
 
-  const ticketRes = await pool.query(
+  const user = await pool.query(
+    "SELECT * FROM users WHERE national_id=$1",
+    [nationalId]
+  );
+
+  if (!user.rows.length)
+    return res.status(400).json({ error: "Invalid credentials" });
+
+  const valid = await bcrypt.compare(
+    password,
+    user.rows[0].password_hash
+  );
+
+  if (!valid)
+    return res.status(400).json({ error: "Invalid credentials" });
+
+  res.json({ token: generateToken(user.rows[0]) });
+});
+
+/* =======================
+   GPS CHECK
+======================= */
+app.post("/api/gps-check", auth, (req, res) => {
+  const { lat, lng } = req.body;
+  if (!lat || !lng)
+    return res.status(403).json({
+      error: "Access to GPS is required for security",
+    });
+
+  res.json({ success: true });
+});
+
+/* =======================
+   WALLET
+======================= */
+app.get("/api/wallet", auth, async (req, res) => {
+  const w = await pool.query(
+    "SELECT * FROM wallets WHERE user_id=$1",
+    [req.user.id]
+  );
+  res.json(w.rows[0]);
+});
+
+/* =======================
+   CREATE TICKET
+======================= */
+app.post("/api/tickets", auth, async (req, res) => {
+  const {
+    from,
+    to,
+    price,
+    type,
+    imageUrl,
+    count,
+    tripStart,
+    durationMinutes,
+    lat,
+    lng,
+  } = req.body;
+
+  if (!lat || !lng)
+    return res.status(403).json({
+      error: "Access to GPS is required for security",
+    });
+
+  if (!imageUrl)
+    return res.status(400).json({ error: "Ticket image required" });
+
+  for (let i = 0; i < count; i++) {
+    await pool.query(
+      `INSERT INTO tickets
+      (seller_id, from_station, to_station, price, type,
+       image_url, trip_start, trip_duration_minutes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        req.user.id,
+        from,
+        to,
+        price,
+        type,
+        imageUrl,
+        tripStart,
+        durationMinutes,
+      ]
+    );
+  }
+
+  res.json({ success: true });
+});
+
+/* =======================
+   BUY TICKET (CHECKOUT LOGIC)
+======================= */
+app.post("/api/buy/:id", auth, async (req, res) => {
+  const ticketId = req.params.id;
+
+  const t = await pool.query(
     "SELECT * FROM tickets WHERE id=$1 AND status='available'",
     [ticketId]
   );
 
-  if (!ticketRes.rows.length)
-    return res.status(400).json({ error: "التذكرة غير متاحة" });
+  if (!t.rows.length)
+    return res.status(400).json({ error: "Ticket not available" });
 
-  const ticket = ticketRes.rows[0];
-  const amountCents = (ticket.price + 10) * 100; // + عمولة المشتري
+  const ticket = t.rows[0];
+  const platformFee = 10;
 
-  try {
-    // 1️⃣ Auth Token
-    const auth = await axios.post(
-      "https://accept.paymob.com/api/auth/tokens",
-      { api_key: process.env.PAYMOB_API_KEY }
-    );
+  await pool.query(
+    `UPDATE wallets
+     SET locked_balance = locked_balance + $1
+     WHERE user_id=$2`,
+    [ticket.price - platformFee, ticket.seller_id]
+  );
 
-    // 2️⃣ Create Order
-    const order = await axios.post(
-      "https://accept.paymob.com/api/ecommerce/orders",
-      {
-        auth_token: auth.data.token,
-        delivery_needed: false,
-        amount_cents: amountCents,
-        currency: "EGP",
-        items: [
-          {
-            name: "Train Ticket",
-            amount_cents: amountCents,
-            quantity: 1,
-          },
-        ],
-      }
-    );
+  await pool.query(
+    `UPDATE tickets
+     SET status='sold', buyer_id=$1
+     WHERE id=$2`,
+    [req.user.id, ticketId]
+  );
 
-    // 3️⃣ Payment Key
-    const paymentKey = await axios.post(
-      "https://accept.paymob.com/api/acceptance/payment_keys",
-      {
-        auth_token: auth.data.token,
-        amount_cents: amountCents,
-        expiration: 3600,
-        order_id: order.data.id,
-        billing_data: {
-          apartment: "NA",
-          email: "user@test.com",
-          floor: "NA",
-          first_name: "Smart",
-          last_name: "Train",
-          phone_number: "01000000000",
-          street: "NA",
-          building: "NA",
-          city: "Cairo",
-          country: "EG",
-        },
-        currency: "EGP",
-        integration_id: process.env.PAYMOB_INTEGRATION_ID,
-      }
-    );
-
-    res.json({
-      iframe_url: `https://accept.paymob.com/api/acceptance/iframes/XXXX?payment_token=${paymentKey.data.token}`,
-    });
-  } catch (e) {
-    res.status(500).json({ error: "Paymob Error" });
-  }
+  res.json({
+    success: true,
+    message:
+      "Purchase completed. No cancellation or refund allowed.",
+  });
 });
+
+/* =======================
+   TRACK TRIP
+======================= */
+app.get("/api/trip/:id", auth, async (req, res) => {
+  const t = await pool.query(
+    "SELECT * FROM tickets WHERE id=$1",
+    [req.params.id]
+  );
+
+  if (!t.rows.length)
+    return res.status(404).json({ error: "Not found" });
+
+  const ticket = t.rows[0];
+  const start = new Date(ticket.trip_start);
+  const now = new Date();
+
+  const total = ticket.trip_duration_minutes * 60000;
+  const elapsed = now - start;
+
+  const progress = Math.min(
+    Math.round((elapsed / total) * 100),
+    100
+  );
+
+  res.json({
+    from: ticket.from_station,
+    to: ticket.to_station,
+    progress,
+  });
+});
+
+/* =======================
+   AUTO RELEASE LOCKED BALANCE
+======================= */
+setInterval(async () => {
+  const now = new Date();
+
+  const tickets = await pool.query(
+    `SELECT * FROM tickets
+     WHERE status='sold' AND payment_released=false`
+  );
+
+  for (const t of tickets.rows) {
+    const start = new Date(t.trip_start);
+    const half =
+      start.getTime() +
+      (t.trip_duration_minutes * 60000) / 2;
+
+    if (now.getTime() >= half) {
+      await pool.query(
+        `UPDATE wallets
+         SET available_balance = available_balance + locked_balance,
+             locked_balance = 0
+         WHERE user_id=$1`,
+        [t.seller_id]
+      );
+
+      await pool.query(
+        "UPDATE tickets SET payment_released=true WHERE id=$1",
+        [t.id]
+      );
+    }
+  }
+}, 60000);
+
+/* =======================
+   SERVER
+======================= */
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () =>
+  console.log("Smart Train EG Backend Running")
+);
