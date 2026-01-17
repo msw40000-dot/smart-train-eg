@@ -1,42 +1,28 @@
-<login html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>تسجيل الدخول | Smart Train EG</title>
-    <style>
-        body { font-family: Arial; background: #f0f2f5; padding: 50px; text-align: center; }
-        .form-container { background: white; max-width: 350px; margin: auto; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 95%; padding: 10px; background: #00796b; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    </style>
+    <title>تسجيل الدخول</title>
 </head>
 <body>
-    <div class="form-container">
+    <div style="max-width:400px; margin:auto; text-align:center;">
         <h2>تسجيل الدخول</h2>
-        <input type="text" id="nationalId" placeholder="الرقم القومي">
-        <input type="password" id="password" placeholder="كلمة السر">
-        <button onclick="login()">دخول</button>
-        <p id="msg"></p>
+        <input type="text" id="nid" placeholder="الرقم القومي" style="width:100%; margin:10px 0; padding:10px;">
+        <input type="password" id="pass" placeholder="كلمة المرور" style="width:100%; margin:10px 0; padding:10px;">
+        <button onclick="login()" style="width:100%; padding:10px; background:#00796b; color:white; border:none;">دخول</button>
     </div>
     <script>
         async function login() {
-            const data = {
-                nationalId: document.getElementById('nationalId').value,
-                password: document.getElementById('password').value
-            };
-            const response = await fetch('/api/login', {
+            const res = await fetch('/api/auth/login', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ national_id: document.getElementById('nid').value, password: document.getElementById('pass').value })
             });
-            const result = await response.json();
-            if (result.token) {
-                localStorage.setItem('token', result.token);
-                alert('أهلاً بك مجدداً!');
+            const data = await res.json();
+            if(res.ok) {
+                localStorage.setItem('token', data.token); // حفظ مفتاح الدخول
                 window.location.href = 'dashboard.html';
-            } else {
-                document.getElementById('msg').innerText = "خطأ: " + result.error;
-            }
+            } else { alert('بيانات غير صحيحة'); }
         }
     </script>
 </body>
