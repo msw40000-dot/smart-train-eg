@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة التحكم</title>
+    <style>
+        .card { background: white; padding: 20px; border-radius: 12px; margin: 20px auto; max-width: 600px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .balance { font-size: 24px; color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>محفظتك الإلكترونية 💳</h2>
+        <p>الرصيد المتاح: <span id="balance" class="balance">0.00</span> ج.م</p>
+        <hr>
+        <button onclick="location.href='index.html'">الرجوع للرئيسية</button>
+        <button onclick="localStorage.clear(); location.href='login.html'">تسجيل خروج</button>
+    </div>
+
+    <script>
+        async function loadData() {
+            const token = localStorage.getItem('token');
+            if(!token) { window.location.href = 'login.html'; return; }
+            
+            const res = await fetch('/api/wallet', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            if(data.available_balance !== undefined) {
+                document.getElementById('balance').innerText = data.available_balance;
+            }
+        }
+        window.onload = loadData;
+    </script>
+</body>
+</html>
