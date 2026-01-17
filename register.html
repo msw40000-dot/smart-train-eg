@@ -1,53 +1,40 @@
-<register html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>تسجيل حساب جديد | Smart Train EG</title>
+    <title>تسجيل حساب جديد</title>
     <style>
-        body { font-family: Arial; background: #f0f2f5; padding: 20px; text-align: center; }
-        .form-container { background: white; max-width: 400px; margin: auto; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-box { max-width: 400px; margin: 50px auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 95%; padding: 10px; background: #004d40; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button { width: 100%; padding: 12px; background: #004d40; color: white; border: none; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="form-container">
+    <div class="form-box">
         <h2>إنشاء حساب جديد</h2>
-        <input type="text" id="fullName" placeholder="الاسم الكامل">
-        <input type="text" id="nationalId" placeholder="الرقم القومي (14 رقم)">
-        <input type="password" id="password" placeholder="كلمة السر (6 أرقام)">
-        <input type="text" id="mobile" placeholder="رقم الموبايل">
-        <input type="text" id="address" placeholder="العنوان">
-        <label><input type="checkbox" id="terms"> أوافق على الشروط والأحكام</label>
+        <input type="text" id="name" placeholder="الاسم بالكامل">
+        <input type="text" id="nid" placeholder="الرقم القومي (14 رقم)">
+        <input type="text" id="phone" placeholder="رقم الموبايل">
+        <input type="password" id="pass" placeholder="كلمة المرور">
         <button onclick="register()">تسجيل</button>
-        <p id="msg"></p>
     </div>
 
     <script>
         async function register() {
-            const data = {
-                fullName: document.getElementById('fullName').value,
-                nationalId: document.getElementById('nationalId').value,
-                password: document.getElementById('password').value,
-                mobile: document.getElementById('mobile').value,
-                address: document.getElementById('address').value,
-                termsAccepted: document.getElementById('terms').checked
+            const userData = {
+                full_name: document.getElementById('name').value,
+                national_id: document.getElementById('nid').value,
+                mobile: document.getElementById('phone').value,
+                password: document.getElementById('pass').value
             };
-
-            const response = await fetch('/api/register', {
+            const res = await fetch('/api/auth/register', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData)
             });
-
-            const result = await response.json();
-            if (result.token) {
-                alert('تم التسجيل بنجاح!');
-                localStorage.setItem('token', result.token);
-                window.location.href = 'index.html'; // يرجعه للرئيسية بعد النجاح
-            } else {
-                document.getElementById('msg').innerText = "خطأ: " + result.error;
-            }
+            const data = await res.json();
+            if(res.ok) { alert('تم التسجيل!'); window.location.href = 'login.html'; }
+            else { alert('خطأ: ' + data.message); }
         }
     </script>
 </body>
